@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Property Master Data Import - ClickUp to Supabase</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>🏠 Property Master Data Import</h1>
+      <p class="subtitle">ClickUp → Supabase Migration Tool</p>
+      <p class="warning">⚠️ One-time migration tool - Updates existing properties only</p>
+    </header>
+
+    <!-- Instructions -->
+    <section class="instructions">
+      <h2>Instructions</h2>
+      <ol>
+        <li>Export your property data from ClickUp as CSV</li>
+        <li>Upload the CSV file below</li>
+        <li>Click "Import Data" to process</li>
+        <li>Review the results and handle any unmatched properties</li>
+      </ol>
+      <details>
+        <summary>📋 Expected CSV Columns (click to expand)</summary>
+        <div class="expected-columns">
+          <p>Your CSV should include these columns:</p>
+          <ul>
+            <li>Task Name (property address)</li>
+            <li>Status, Bedrooms, Bathrooms, Square Footage</li>
+            <li>Year of house, Zillow Value, Acquisition Cost</li>
+            <li>Date Acquired, Acquisition Method</li>
+            <li>Fair Market Rent, Monthly Payment, Mortgage Balance</li>
+            <li>Interest Rate, Department In Charge</li>
+            <li>Foundation Type, Garage Spaces, Gas/Water/Stove Type</li>
+            <li>Checkboxes: Deck/Porch, Dining Room, Family Room, etc.</li>
+            <li>Lockbox Code, TTCU #, Refi Bank</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <!-- Upload Section -->
+    <section class="upload-section">
+      <div class="upload-area" id="uploadArea">
+        <input type="file" id="csvFile" accept=".csv" hidden>
+        <label for="csvFile" class="upload-label">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span class="upload-text">Click to upload CSV file</span>
+          <span class="upload-hint">or drag and drop</span>
+        </label>
+      </div>
+
+      <div id="fileInfo" class="file-info" style="display: none;">
+        <p>📄 <strong id="fileName"></strong></p>
+        <p class="file-stats">
+          <span id="fileSize"></span> |
+          <span id="rowCount"></span> rows
+        </p>
+      </div>
+
+      <button id="importBtn" class="btn btn-primary btn-large" disabled>
+        Import Data to Supabase
+      </button>
+    </section>
+
+    <!-- Progress Section -->
+    <section class="progress-section" id="progressSection" style="display: none;">
+      <h2>Import Progress</h2>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <p class="progress-text" id="progressText">Processing...</p>
+      <div class="progress-details" id="progressDetails"></div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-section" id="resultsSection" style="display: none;">
+      <h2>Import Results</h2>
+
+      <!-- Summary Stats -->
+      <div class="stats-grid">
+        <div class="stat-card stat-total">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Total Processed</div>
+        </div>
+        <div class="stat-card stat-success">
+          <div class="stat-value" id="statSuccess">0</div>
+          <div class="stat-label">Successfully Imported</div>
+        </div>
+        <div class="stat-card stat-unmatched">
+          <div class="stat-value" id="statUnmatched">0</div>
+          <div class="stat-label">No Match Found</div>
+        </div>
+        <div class="stat-card stat-errors">
+          <div class="stat-value" id="statErrors">0</div>
+          <div class="stat-label">Errors</div>
+        </div>
+      </div>
+
+      <!-- Import Status Breakdown -->
+      <div class="status-breakdown" id="statusBreakdown" style="display: none;">
+        <h3>Import Status Breakdown</h3>
+        <div class="status-items">
+          <div class="status-item">
+            <span class="status-badge status-complete">Complete</span>
+            <span class="status-count" id="statusComplete">0</span>
+          </div>
+          <div class="status-item">
+            <span class="status-badge status-needs-enhancement">Needs Enhancement</span>
+            <span class="status-count" id="statusNeedsEnhancement">0</span>
+          </div>
+          <div class="status-item">
+            <span class="status-badge status-sparse">Sparse</span>
+            <span class="status-count" id="statusSparse">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Unmatched Properties -->
+      <div class="unmatched-section" id="unmatchedSection" style="display: none;">
+        <h3>⚠️ Unmatched Properties (Require Manual Review)</h3>
+        <p class="help-text">These properties from your CSV could not be matched to existing database records:</p>
+        <div class="unmatched-list" id="unmatchedList"></div>
+      </div>
+
+      <!-- Errors -->
+      <div class="errors-section" id="errorsSection" style="display: none;">
+        <h3>❌ Errors</h3>
+        <div class="errors-list" id="errorsList"></div>
+      </div>
+
+      <!-- Download Logs -->
+      <div class="download-section">
+        <button id="downloadLogBtn" class="btn btn-secondary">
+          📥 Download Detailed Import Log (JSON)
+        </button>
+        <button id="resetBtn" class="btn btn-secondary">
+          🔄 Import Another File
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- External Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- App Scripts -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
