@@ -35,6 +35,18 @@ function Wizard() {
     loadInitialData()
   }, [])
 
+  // Auto-save draft to localStorage whenever propertyData changes
+  useEffect(() => {
+    if (Object.keys(propertyData).length > 0) {
+      saveDraftToLocalStorage()
+    }
+  }, [propertyData])
+
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    loadDraftFromLocalStorage()
+  }, [])
+
   /**
    * Load dropdown options and property list
    */
@@ -61,6 +73,56 @@ function Wizard() {
       console.error('Error loading wizard data:', err)
       showAlert('Error loading data: ' + err.message, 'error')
       setLoading(false)
+    }
+  }
+
+  /**
+   * Save draft to localStorage
+   */
+  function saveDraftToLocalStorage() {
+    try {
+      const draft = {
+        propertyData,
+        currentStep,
+        timestamp: new Date().toISOString()
+      }
+      localStorage.setItem('property_wizard_draft', JSON.stringify(draft))
+    } catch (err) {
+      console.error('Error saving draft:', err)
+    }
+  }
+
+  /**
+   * Load draft from localStorage
+   */
+  function loadDraftFromLocalStorage() {
+    try {
+      const draftJson = localStorage.getItem('property_wizard_draft')
+      if (draftJson && !isEditMode) {
+        const draft = JSON.parse(draftJson)
+        // Only load draft if it's recent (within 7 days)
+        const draftDate = new Date(draft.timestamp)
+        const daysSinceDraft = (Date.now() - draftDate.getTime()) / (1000 * 60 * 60 * 24)
+
+        if (daysSinceDraft < 7 && draft.propertyData) {
+          setPropertyData(draft.propertyData)
+          setCurrentStep(draft.currentStep || 1)
+          showAlert('Draft restored from ' + draftDate.toLocaleDateString(), 'info')
+        }
+      }
+    } catch (err) {
+      console.error('Error loading draft:', err)
+    }
+  }
+
+  /**
+   * Clear draft from localStorage
+   */
+  function clearDraftFromLocalStorage() {
+    try {
+      localStorage.removeItem('property_wizard_draft')
+    } catch (err) {
+      console.error('Error clearing draft:', err)
     }
   }
 
@@ -129,31 +191,27 @@ function Wizard() {
 
   /**
    * Save and continue to next step
+   * NOTE: This ONLY saves to localStorage, NOT to Supabase
+   * Actual database save happens in saveAndFinish() on final step
    */
-  async function saveAndContinue() {
+  function saveAndContinue() {
     if (!validateStep()) return
 
-    try {
-      setSaving(true)
-      const saved = await saveProperty(propertyData)
-      setPropertyData(saved)
-      showSaved()
-      nextStep()
-    } catch (err) {
-      console.error('Error saving property:', err)
-      showAlert('Error saving: ' + err.message, 'error')
-    } finally {
-      setSaving(false)
-    }
+    // Save to localStorage (already handled by useEffect)
+    // Just show saved indicator and move to next step
+    showSaved()
+    nextStep()
   }
 
   /**
    * Save and finish (last step)
+   * This is the ONLY function that saves to Supabase
    */
   async function saveAndFinish() {
     try {
       setSaving(true)
       await saveProperty(propertyData)
+      clearDraftFromLocalStorage()
       showAlert('Property saved successfully!', 'success')
       setTimeout(() => navigate('/'), 2000)
     } catch (err) {
@@ -385,7 +443,7 @@ function Step2({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
   return (
     <div className="form-section active">
       <h2 className="section-title">Basic Property Information</h2>
-      <p className="section-description">Enter core property details</p>
+      <p className="section-description">Enter core property details (auto-saved as draft)</p>
 
       <div className="form-row">
         <div className="form-group">
@@ -542,8 +600,8 @@ function Step2({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
         <button className="btn btn-secondary" onClick={prevStep}>
           Previous
         </button>
-        <button className="btn btn-success" onClick={saveAndContinue} disabled={saving}>
-          {saving ? 'Saving...' : 'Save & Continue'}
+        <button className="btn btn-success" onClick={saveAndContinue}>
+          Continue
         </button>
       </div>
     </div>
@@ -554,7 +612,7 @@ function Step3({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
   return (
     <div className="form-section active">
       <h2 className="section-title">Acquisition & Financial Details</h2>
-      <p className="section-description">Purchase information and financial data</p>
+      <p className="section-description">Purchase information and financial data (auto-saved as draft)</p>
 
       <div className="form-row">
         <div className="form-group">
@@ -684,8 +742,8 @@ function Step3({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
         <button className="btn btn-secondary" onClick={prevStep}>
           Previous
         </button>
-        <button className="btn btn-success" onClick={saveAndContinue} disabled={saving}>
-          {saving ? 'Saving...' : 'Save & Continue'}
+        <button className="btn btn-success" onClick={saveAndContinue}>
+          Continue
         </button>
       </div>
     </div>
@@ -696,7 +754,7 @@ function Step4({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
   return (
     <div className="form-section active">
       <h2 className="section-title">Current Status</h2>
-      <p className="section-description">Occupancy and tenant information</p>
+      <p className="section-description">Occupancy and tenant information (auto-saved as draft)</p>
 
       <div className="form-row">
         <div className="form-group">
@@ -793,8 +851,8 @@ function Step4({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
         <button className="btn btn-secondary" onClick={prevStep}>
           Previous
         </button>
-        <button className="btn btn-success" onClick={saveAndContinue} disabled={saving}>
-          {saving ? 'Saving...' : 'Save & Continue'}
+        <button className="btn btn-success" onClick={saveAndContinue}>
+          Continue
         </button>
       </div>
     </div>
@@ -805,7 +863,7 @@ function Step5({ propertyData, updateField, dropdownOptions, prevStep, saveAndFi
   return (
     <div className="form-section active">
       <h2 className="section-title">Property Condition & Maintenance</h2>
-      <p className="section-description">Inspection history and maintenance records</p>
+      <p className="section-description">Inspection history and maintenance records (will save to database)</p>
 
       <div className="form-row">
         <div className="form-group">
