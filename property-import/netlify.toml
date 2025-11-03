@@ -1,0 +1,16 @@
+# Netlify Configuration for Property Import Tool
+# Static HTML/CSS/JS - No Build Required
+
+[build]
+  base = "property-import/frontend"
+  publish = "."
+  command = ""
+
+# Security Headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
