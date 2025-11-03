@@ -14,24 +14,27 @@ CREATE TABLE IF NOT EXISTS properties (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
   -- Core Identity (5 fields)
+  -- Only address, city, state are required for property identity
   address TEXT NOT NULL,
   city TEXT NOT NULL,
   state TEXT NOT NULL DEFAULT 'TX',
-  zip TEXT NOT NULL,
+  zip TEXT,
   county TEXT,
 
   -- Physical Characteristics (7 fields)
-  property_type TEXT NOT NULL,
-  bedrooms INTEGER NOT NULL,
-  bathrooms NUMERIC(3,1) NOT NULL,
+  -- All nullable to allow partial data entry
+  property_type TEXT,
+  bedrooms INTEGER,
+  bathrooms NUMERIC(3,1),
   square_footage INTEGER,
   lot_size INTEGER,
   year_built INTEGER,
   stories INTEGER,
 
   -- Acquisition & Financial (10 fields)
-  purchase_date DATE NOT NULL,
-  purchase_price NUMERIC(12,2) NOT NULL,
+  -- All nullable to allow partial data entry
+  purchase_date DATE,
+  purchase_price NUMERIC(12,2),
   acquisition_method TEXT,
   current_estimated_value NUMERIC(12,2),
   total_rehab_cost NUMERIC(12,2),
