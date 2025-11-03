@@ -127,7 +127,8 @@ CREATE TABLE IF NOT EXISTS dropdown_options (
   option_type TEXT NOT NULL,
   option_value TEXT NOT NULL,
   sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT unique_option_type_value UNIQUE (option_type, option_value)
 );
 
 -- Create index on option_type for faster lookups
@@ -354,7 +355,7 @@ INSERT INTO dropdown_options (option_type, option_value, sort_order) VALUES
 ('State', 'NM', 11),
 ('State', 'OK', 12),
 ('State', 'TN', 13)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (option_type, option_value) DO NOTHING;
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (Optional - enable if you want user-level access control)
