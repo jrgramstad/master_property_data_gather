@@ -1,12 +1,7 @@
-# Netlify Configuration for Property Import Tool
-# Static HTML/CSS/JS - No Build Required
-
 [build]
   base = "property-import/frontend"
   publish = "."
-  command = ""
 
-# Security Headers
 [[headers]]
   for = "/*"
   [headers.values]
