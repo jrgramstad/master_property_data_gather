@@ -30,7 +30,9 @@ export async function getAllProperties() {
   const { data, error } = await supabase
     .from('properties')
     .select('*')
-    .order('created_at', { ascending: false })
+    .eq('active', true)
+    .order('sort_order', { ascending: true })
+    .limit(1000)
 
   if (error) throw error
   return data || []
@@ -187,13 +189,15 @@ export async function getDashboardStats() {
 
 /**
  * Get property list for dropdown (simplified view)
- * @returns {Promise<Array>} Array of {id, address} objects
+ * @returns {Promise<Array>} Array of {id, name, address} objects
  */
 export async function getPropertyList() {
   const { data, error } = await supabase
     .from('properties')
-    .select('id, address')
-    .order('address', { ascending: true })
+    .select('id, name, address')
+    .eq('active', true)
+    .order('sort_order', { ascending: true })
+    .limit(1000)
 
   if (error) throw error
   return data || []

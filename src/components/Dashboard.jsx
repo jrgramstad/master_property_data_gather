@@ -84,7 +84,7 @@ function Dashboard() {
     const sorted = [...filteredProperties].sort((a, b) => {
       switch (sortBy) {
         case 'address':
-          return (a.address || '').localeCompare(b.address || '')
+          return (a.name || a.address || '').localeCompare(b.name || b.address || '')
         case 'completeness-asc':
           return (a.data_completeness_score || 0) - (b.data_completeness_score || 0)
         case 'completeness-desc':
@@ -253,7 +253,7 @@ function Dashboard() {
 
                 return (
                   <tr key={property.id} className={rowClass} onClick={() => editProperty(property.id)}>
-                    <td>{property.address || 'No Address'}</td>
+                    <td>{property.name || property.address || 'Unnamed Property'}</td>
                     <td>{property.city || '-'}</td>
                     <td>{property.property_type || '-'}</td>
                     <td>{property.occupancy_status || '-'}</td>
