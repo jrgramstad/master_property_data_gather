@@ -95,9 +95,13 @@
           <div class="stat-value" id="statSuccess">0</div>
           <div class="stat-label">Successfully Imported</div>
         </div>
-        <div class="stat-card stat-unmatched">
-          <div class="stat-value" id="statUnmatched">0</div>
-          <div class="stat-label">No Match Found</div>
+        <div class="stat-card stat-created">
+          <div class="stat-value" id="statCreated">0</div>
+          <div class="stat-label">Created (New)</div>
+        </div>
+        <div class="stat-card stat-updated">
+          <div class="stat-value" id="statUpdated">0</div>
+          <div class="stat-label">Updated (Existing)</div>
         </div>
         <div class="stat-card stat-errors">
           <div class="stat-value" id="statErrors">0</div>
@@ -124,11 +128,11 @@
         </div>
       </div>
 
-      <!-- Unmatched Properties -->
-      <div class="unmatched-section" id="unmatchedSection" style="display: none;">
-        <h3>⚠️ Unmatched Properties (Require Manual Review)</h3>
-        <p class="help-text">These properties from your CSV could not be matched to existing database records:</p>
-        <div class="unmatched-list" id="unmatchedList"></div>
+      <!-- Created Properties -->
+      <div class="created-section" id="createdSection" style="display: none;">
+        <h3>✨ New Properties Created</h3>
+        <p class="help-text">These properties were added as new records to the database:</p>
+        <div class="created-list" id="createdList"></div>
       </div>
 
       <!-- Errors -->

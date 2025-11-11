@@ -12,9 +12,10 @@ let parsedCSV = null;
 let importResults = {
   total: 0,
   successful: 0,
-  unmatched: 0,
+  created: 0,
+  updated: 0,
   errors: 0,
-  unmatchedProperties: [],
+  createdProperties: [],
   errorDetails: [],
   statusBreakdown: {
     complete: 0,
@@ -144,6 +145,10 @@ async function handleImport() {
 
   console.log(`Found ${existingProperties.length} existing properties in database`);
 
+  // Get max sort_order for new properties
+  const maxSortOrder = await fetchMaxSortOrder();
+  let nextSortOrder = maxSortOrder + 1;
+
   // Process each row
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
@@ -152,7 +157,10 @@ async function handleImport() {
     updateProgress(progress, `Processing ${i + 1} of ${data.length}...`);
 
     try {
-      await processProperty(row, existingProperties);
+      const created = await processProperty(row, existingProperties, nextSortOrder);
+      if (created) {
+        nextSortOrder++;
+      }
     } catch (error) {
       console.error('Error processing row:', row, error);
       importResults.errors++;
@@ -186,7 +194,23 @@ async function fetchExistingProperties() {
   }
 }
 
-async function processProperty(row, existingProperties) {
+async function fetchMaxSortOrder() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('properties')
+      .select('sort_order')
+      .order('sort_order', { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+    return data && data.length > 0 ? data[0].sort_order : 0;
+  } catch (error) {
+    console.error('Error fetching max sort_order:', error);
+    return 0;
+  }
+}
+
+async function processProperty(row, existingProperties, sortOrder) {
   // Extract address from "Task Name"
   const address = row['Task Name'] || '';
   if (!address.trim()) {
@@ -195,23 +219,11 @@ async function processProperty(row, existingProperties) {
       address: 'Empty Task Name',
       error: 'Missing address in Task Name column'
     });
-    return;
+    return false;
   }
 
   // Try to match to existing property
   const matchedProperty = findMatchingProperty(address, existingProperties);
-
-  if (!matchedProperty) {
-    // No match found
-    importResults.unmatched++;
-    importResults.unmatchedProperties.push(address);
-    importResults.detailedLog.push({
-      address,
-      status: 'UNMATCHED',
-      message: 'No matching property found in database'
-    });
-    return;
-  }
 
   // Transform CSV data to database format
   const transformedData = transformRowData(row);
@@ -230,32 +242,76 @@ async function processProperty(row, existingProperties) {
     importResults.statusBreakdown.sparse++;
   }
 
-  // Update property in database
-  try {
-    const { error } = await supabaseClient
-      .from('properties')
-      .update(transformedData)
-      .eq('id', matchedProperty.id);
+  if (!matchedProperty) {
+    // No match found - INSERT as new property
+    try {
+      // Extract property name from address
+      const propertyName = extractPropertyName(address);
 
-    if (error) throw error;
+      // Add required fields for new property
+      transformedData.name = propertyName;
+      transformedData.active = true;
+      transformedData.sort_order = sortOrder;
 
-    importResults.successful++;
-    importResults.detailedLog.push({
-      address,
-      matched_to: matchedProperty.name,
-      status: 'SUCCESS',
-      import_status: importStatus,
-      fields_updated: Object.keys(transformedData).length
-    });
+      const { error } = await supabaseClient
+        .from('properties')
+        .insert([transformedData]);
 
-    console.log(`✓ Updated: ${address} → ${matchedProperty.name}`);
-  } catch (error) {
-    importResults.errors++;
-    importResults.errorDetails.push({
-      address,
-      error: error.message
-    });
-    console.error(`✗ Failed to update: ${address}`, error);
+      if (error) throw error;
+
+      importResults.successful++;
+      importResults.created++;
+      importResults.createdProperties.push(address);
+      importResults.detailedLog.push({
+        address,
+        property_name: propertyName,
+        status: 'CREATED',
+        import_status: importStatus,
+        fields_inserted: Object.keys(transformedData).length
+      });
+
+      console.log(`✓ Created: ${address} → ${propertyName}`);
+      return true; // Indicate a new property was created
+    } catch (error) {
+      importResults.errors++;
+      importResults.errorDetails.push({
+        address,
+        error: error.message
+      });
+      console.error(`✗ Failed to create: ${address}`, error);
+      return false;
+    }
+  } else {
+    // Match found - UPDATE existing property
+    try {
+      const { error } = await supabaseClient
+        .from('properties')
+        .update(transformedData)
+        .eq('id', matchedProperty.id);
+
+      if (error) throw error;
+
+      importResults.successful++;
+      importResults.updated++;
+      importResults.detailedLog.push({
+        address,
+        matched_to: matchedProperty.name,
+        status: 'UPDATED',
+        import_status: importStatus,
+        fields_updated: Object.keys(transformedData).length
+      });
+
+      console.log(`✓ Updated: ${address} → ${matchedProperty.name}`);
+      return false; // No new property created
+    } catch (error) {
+      importResults.errors++;
+      importResults.errorDetails.push({
+        address,
+        error: error.message
+      });
+      console.error(`✗ Failed to update: ${address}`, error);
+      return false;
+    }
   }
 }
 
@@ -288,6 +344,26 @@ function normalizeAddress(address) {
     .replace(/[^\w\s]/g, '') // Remove special chars
     .replace(/\s+/g, ' ')     // Normalize spaces
     .trim();
+}
+
+function extractPropertyName(fullAddress) {
+  // Extract street name from full address
+  // Example: "3405 Chatham Ct, Forest Hill, TX 76140, USA" → "Chatham Ct"
+
+  // Try to extract street name (after street number, before comma)
+  const match = fullAddress.match(/^\d+\s+(.+?)(?:,|$)/);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+
+  // Fallback: use first part before comma
+  const parts = fullAddress.split(',');
+  if (parts.length > 0) {
+    return parts[0].trim();
+  }
+
+  // Last resort: use full address
+  return fullAddress.trim();
 }
 
 function fuzzyMatch(str1, str2) {
@@ -474,7 +550,8 @@ function displayResults() {
   // Update stats
   document.getElementById('statTotal').textContent = importResults.total;
   document.getElementById('statSuccess').textContent = importResults.successful;
-  document.getElementById('statUnmatched').textContent = importResults.unmatched;
+  document.getElementById('statCreated').textContent = importResults.created;
+  document.getElementById('statUpdated').textContent = importResults.updated;
   document.getElementById('statErrors').textContent = importResults.errors;
 
   // Status breakdown
@@ -485,15 +562,15 @@ function displayResults() {
     document.getElementById('statusSparse').textContent = importResults.statusBreakdown.sparse;
   }
 
-  // Unmatched properties
-  if (importResults.unmatchedProperties.length > 0) {
-    document.getElementById('unmatchedSection').style.display = 'block';
-    const unmatchedList = document.getElementById('unmatchedList');
-    unmatchedList.innerHTML = importResults.unmatchedProperties
+  // Created properties
+  if (importResults.createdProperties.length > 0) {
+    document.getElementById('createdSection').style.display = 'block';
+    const createdList = document.getElementById('createdList');
+    createdList.innerHTML = importResults.createdProperties
       .map(addr => `
-        <div class="unmatched-item">
+        <div class="created-item">
           <strong>${escapeHtml(addr)}</strong>
-          <small>Could not find matching property in database</small>
+          <small>New property created in database</small>
         </div>
       `)
       .join('');
