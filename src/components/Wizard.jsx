@@ -421,7 +421,7 @@ function Step1({ propertyData, propertyList, onPropertySelected, goToDashboard, 
           <option value="new">+ Add New Property</option>
           {propertyList.map((property) => (
             <option key={property.id} value={property.id}>
-              {property.name || property.address || 'Unnamed Property'}
+              {property.address}
             </option>
           ))}
         </select>

@@ -27,12 +27,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
  * @returns {Promise<Array>} Array of property objects
  */
 export async function getAllProperties() {
-  const { data, error } = await supabase
+  const { data, error} = await supabase
     .from('properties')
     .select('*')
-    .eq('active', true)
-    .order('sort_order', { ascending: true })
-    .limit(1000)
+    .order('created_at', { ascending: false })
 
   if (error) throw error
   return data || []
@@ -194,10 +192,8 @@ export async function getDashboardStats() {
 export async function getPropertyList() {
   const { data, error } = await supabase
     .from('properties')
-    .select('id, name, address')
-    .eq('active', true)
-    .order('sort_order', { ascending: true })
-    .limit(1000)
+    .select('id, address')
+    .order('address', { ascending: true })
 
   if (error) throw error
   return data || []
