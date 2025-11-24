@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { getAllProperties, getDashboardStats, formatDate } from '../lib/supabase'
 
 function Dashboard() {
@@ -191,6 +191,9 @@ function Dashboard() {
         <button className="btn btn-primary btn-large" onClick={addNewProperty}>
           + Add New Property
         </button>
+        <Link to="/taxes" className="btn btn-secondary">
+          Property Taxes
+        </Link>
         <button className="btn btn-secondary" onClick={refresh}>
           Refresh
         </button>

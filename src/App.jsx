@@ -6,6 +6,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import Wizard from './components/Wizard'
+import PropertyTaxes from './components/PropertyTaxes'
 import './App.css'
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/taxes" element={<PropertyTaxes />} />
         <Route path="/wizard/:mode/:id?" element={<Wizard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

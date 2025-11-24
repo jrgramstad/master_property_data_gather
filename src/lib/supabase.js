@@ -161,6 +161,55 @@ export async function getDropdownOptionsByType(optionType) {
 }
 
 // ============================================================================
+// PROPERTY TAXES API
+// ============================================================================
+
+/**
+ * Get all property taxes with property names
+ * @param {number} taxYear - Optional year filter
+ * @returns {Promise<Array>} Array of property tax objects
+ */
+export async function getPropertyTaxes(taxYear = null) {
+  let query = supabase
+    .from('property_taxes')
+    .select(`
+      *,
+      properties (
+        id,
+        address
+      )
+    `)
+    .order('tax_year', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (taxYear) {
+    query = query.eq('tax_year', taxYear)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Get distinct tax years from property_taxes
+ * @returns {Promise<Array>} Array of years
+ */
+export async function getTaxYears() {
+  const { data, error } = await supabase
+    .from('property_taxes')
+    .select('tax_year')
+    .order('tax_year', { ascending: false })
+
+  if (error) throw error
+
+  // Get unique years
+  const years = [...new Set(data.map(row => row.tax_year))]
+  return years
+}
+
+// ============================================================================
 // STATISTICS API
 // ============================================================================
 
