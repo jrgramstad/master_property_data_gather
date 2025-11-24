@@ -30,6 +30,7 @@ export async function getAllProperties() {
   const { data, error} = await supabase
     .from('properties')
     .select('*')
+    .eq('active', true)
     .order('created_at', { ascending: false })
 
   if (error) throw error
