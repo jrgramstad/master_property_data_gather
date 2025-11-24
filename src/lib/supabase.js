@@ -209,6 +209,34 @@ export async function getTaxYears() {
   return years
 }
 
+/**
+ * Get all properties with id and address for matching
+ * @returns {Promise<Array>} Array of {id, address} objects
+ */
+export async function getPropertiesForMatching() {
+  const { data, error } = await supabase
+    .from('properties')
+    .select('id, address')
+
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Upsert property taxes (insert or update on conflict)
+ * @param {Array} records - Array of property tax records
+ * @returns {Promise<Object>} Result with inserted and updated counts
+ */
+export async function upsertPropertyTaxes(records) {
+  const { data, error } = await supabase
+    .from('property_taxes')
+    .upsert(records, { onConflict: 'property_id,tax_year' })
+    .select()
+
+  if (error) throw error
+  return data || []
+}
+
 // ============================================================================
 // STATISTICS API
 // ============================================================================

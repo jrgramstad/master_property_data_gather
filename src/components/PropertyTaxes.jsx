@@ -1,11 +1,11 @@
 /**
  * Property Taxes Component
- * Displays property tax records with filtering by year
+ * Displays property tax records with filtering by year and CSV import
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { getPropertyTaxes, formatCurrency, formatDate } from '../lib/supabase'
+import { getPropertyTaxes, getPropertiesForMatching, upsertPropertyTaxes, formatCurrency, formatDate } from '../lib/supabase'
 
 function PropertyTaxes() {
   const [loading, setLoading] = useState(true)
@@ -13,6 +13,11 @@ function PropertyTaxes() {
   const [filteredTaxes, setFilteredTaxes] = useState([])
   const [yearFilter, setYearFilter] = useState('all')
   const [error, setError] = useState(null)
+
+  // Import state
+  const [importing, setImporting] = useState(false)
+  const [importResults, setImportResults] = useState(null)
+  const fileInputRef = useRef(null)
 
   // Available years for filter
   const availableYears = [2024, 2025]
@@ -63,8 +68,127 @@ function PropertyTaxes() {
     }
   }
 
+  /**
+   * Handle Import CSV button click
+   */
+  function handleImportClick() {
+    fileInputRef.current?.click()
+  }
+
+  /**
+   * Handle file selection and CSV import
+   */
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setImporting(true)
+    setError(null)
+
+    try {
+      // Get properties for matching
+      const properties = await getPropertiesForMatching()
+
+      // Create lookup map (lowercase trimmed address -> property)
+      const propertyMap = new Map()
+      properties.forEach(p => {
+        if (p.address) {
+          propertyMap.set(p.address.toLowerCase().trim(), p)
+        }
+      })
+
+      // Parse CSV using Papa Parse (loaded via CDN)
+      window.Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          const records = []
+          const errors = []
+          const rows = results.data
+
+          for (const row of rows) {
+            const propertyName = row.property_name?.trim()
+            const taxYear = parseInt(row.tax_year)
+            const taxAmount = parseFloat(row.tax_amount)
+            const paymentStatus = row.payment_status?.trim() || 'unpaid'
+            const paymentDate = row.payment_date?.trim() || null
+
+            // Validate required fields
+            if (!propertyName || !taxYear || isNaN(taxAmount)) {
+              errors.push({
+                property_name: propertyName || '(empty)',
+                reason: 'Missing required fields (property_name, tax_year, or tax_amount)'
+              })
+              continue
+            }
+
+            // Match property by name (case insensitive)
+            const property = propertyMap.get(propertyName.toLowerCase())
+
+            if (!property) {
+              errors.push({
+                property_name: propertyName,
+                reason: 'Property not found'
+              })
+              continue
+            }
+
+            records.push({
+              property_id: property.id,
+              tax_year: taxYear,
+              tax_amount: taxAmount,
+              payment_status: paymentStatus,
+              payment_date: paymentDate || null
+            })
+          }
+
+          // Upsert records if any
+          let upsertedCount = 0
+          if (records.length > 0) {
+            try {
+              const result = await upsertPropertyTaxes(records)
+              upsertedCount = result.length
+            } catch (err) {
+              setError(`Import failed: ${err.message}`)
+              setImporting(false)
+              return
+            }
+          }
+
+          // Show results
+          setImportResults({
+            total: rows.length,
+            imported: upsertedCount,
+            errors: errors
+          })
+
+          // Reload taxes
+          await loadTaxes()
+          setImporting(false)
+        },
+        error: (err) => {
+          setError(`CSV parse error: ${err.message}`)
+          setImporting(false)
+        }
+      })
+    } catch (err) {
+      setError(`Import error: ${err.message}`)
+      setImporting(false)
+    }
+
+    // Reset file input
+    e.target.value = ''
+  }
+
+  /**
+   * Close import results modal
+   */
+  function closeResultsModal() {
+    setImportResults(null)
+  }
+
   // Loading state
-  if (loading) {
+  if (loading && !importing) {
     return (
       <div className="container">
         <div className="loading">
@@ -76,7 +200,7 @@ function PropertyTaxes() {
   }
 
   // Error state
-  if (error) {
+  if (error && !importResults) {
     return (
       <div className="container">
         <div className="alert alert-error">
@@ -102,9 +226,23 @@ function PropertyTaxes() {
         <Link to="/" className="btn btn-secondary">
           Back to Dashboard
         </Link>
-        <button className="btn btn-secondary" onClick={loadTaxes}>
+        <button
+          className="btn btn-primary"
+          onClick={handleImportClick}
+          disabled={importing}
+        >
+          {importing ? 'Importing...' : 'Import CSV'}
+        </button>
+        <button className="btn btn-secondary" onClick={loadTaxes} disabled={importing}>
           Refresh
         </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".csv"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
       </div>
 
       {/* Filters */}
@@ -169,6 +307,47 @@ function PropertyTaxes() {
           <div className="empty-state-icon">$</div>
           <h3>No Tax Records</h3>
           <p>No property tax records found{yearFilter !== 'all' ? ` for ${yearFilter}` : ''}</p>
+        </div>
+      )}
+
+      {/* Import Results Modal */}
+      {importResults && (
+        <div className="modal-overlay" onClick={closeResultsModal}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h2>Import Results</h2>
+            <div className="import-results">
+              <p><strong>{importResults.imported}</strong> record{importResults.imported !== 1 ? 's' : ''} imported/updated successfully</p>
+              {importResults.errors.length > 0 && (
+                <>
+                  <p style={{ color: '#EA4335', marginTop: '15px' }}>
+                    <strong>{importResults.errors.length}</strong> error{importResults.errors.length !== 1 ? 's' : ''}:
+                  </p>
+                  <ul className="error-list">
+                    {importResults.errors.map((err, idx) => (
+                      <li key={idx}>
+                        <strong>{err.property_name}</strong>: {err.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div style={{ marginTop: '20px', textAlign: 'right' }}>
+              <button className="btn btn-primary" onClick={closeResultsModal}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Importing overlay */}
+      {importing && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ textAlign: 'center' }}>
+            <div className="spinner"></div>
+            <p>Importing CSV...</p>
+          </div>
         </div>
       )}
     </div>
