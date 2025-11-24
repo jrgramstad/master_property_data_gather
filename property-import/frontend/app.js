@@ -1,6 +1,6 @@
 /**
  * Property Master Data Import Tool
- * ClickUp to Supabase Migration
+ * ClickUp to Supabase Migration - UPDATE ONLY
  */
 
 // Initialize Supabase client
@@ -11,17 +11,12 @@ const supabaseClient = createClient(config.supabase.url, config.supabase.anonKey
 let parsedCSV = null;
 let importResults = {
   total: 0,
-  successful: 0,
-  created: 0,
   updated: 0,
+  skipped: 0,
   errors: 0,
-  createdProperties: [],
+  updatedProperties: [],
+  skippedProperties: [],
   errorDetails: [],
-  statusBreakdown: {
-    complete: 0,
-    needsEnhancement: 0,
-    sparse: 0
-  },
   detailedLog: []
 };
 
@@ -102,6 +97,7 @@ function handleFileSelect(event) {
       document.getElementById('rowCount').textContent = results.data.length;
       document.getElementById('importBtn').disabled = false;
       console.log('CSV parsed successfully:', results.data.length, 'rows');
+      console.log('CSV columns:', results.meta.fields);
     },
     error: (error) => {
       alert('Error parsing CSV: ' + error.message);
@@ -137,17 +133,15 @@ async function handleImport() {
   importResults.total = data.length;
 
   // Get existing properties from database
+  updateProgress(0, 'Fetching existing properties from database...');
   const existingProperties = await fetchExistingProperties();
   if (!existingProperties) {
     alert('Failed to fetch existing properties from database');
+    document.getElementById('importBtn').disabled = false;
     return;
   }
 
   console.log(`Found ${existingProperties.length} existing properties in database`);
-
-  // Get max sort_order for new properties
-  const maxSortOrder = await fetchMaxSortOrder();
-  let nextSortOrder = maxSortOrder + 1;
 
   // Process each row
   for (let i = 0; i < data.length; i++) {
@@ -157,10 +151,7 @@ async function handleImport() {
     updateProgress(progress, `Processing ${i + 1} of ${data.length}...`);
 
     try {
-      const created = await processProperty(row, existingProperties, nextSortOrder);
-      if (created) {
-        nextSortOrder++;
-      }
+      await processProperty(row, existingProperties);
     } catch (error) {
       console.error('Error processing row:', row, error);
       importResults.errors++;
@@ -184,7 +175,7 @@ async function fetchExistingProperties() {
   try {
     const { data, error } = await supabaseClient
       .from('properties')
-      .select('id, name, full_address');
+      .select('id, address');
 
     if (error) throw error;
     return data;
@@ -194,124 +185,66 @@ async function fetchExistingProperties() {
   }
 }
 
-async function fetchMaxSortOrder() {
-  try {
-    const { data, error } = await supabaseClient
-      .from('properties')
-      .select('sort_order')
-      .order('sort_order', { ascending: false })
-      .limit(1);
-
-    if (error) throw error;
-    return data && data.length > 0 ? data[0].sort_order : 0;
-  } catch (error) {
-    console.error('Error fetching max sort_order:', error);
-    return 0;
-  }
-}
-
-async function processProperty(row, existingProperties, sortOrder) {
+async function processProperty(row, existingProperties) {
   // Extract address from "Task Name"
-  const address = row['Task Name'] || '';
-  if (!address.trim()) {
+  const taskName = row['Task Name'] || '';
+  if (!taskName.trim()) {
     importResults.errors++;
     importResults.errorDetails.push({
       address: 'Empty Task Name',
       error: 'Missing address in Task Name column'
     });
-    return false;
+    return;
   }
 
-  // Try to match to existing property
-  const matchedProperty = findMatchingProperty(address, existingProperties);
-
-  // Transform CSV data to database format
-  const transformedData = transformRowData(row);
-
-  // Calculate import status based on field completeness
-  const importStatus = calculateImportStatus(transformedData);
-  transformedData.import_status = importStatus;
-  transformedData.imported_at = new Date().toISOString();
-
-  // Update status breakdown
-  if (importStatus.includes('Complete')) {
-    importResults.statusBreakdown.complete++;
-  } else if (importStatus.includes('Enhancement')) {
-    importResults.statusBreakdown.needsEnhancement++;
-  } else {
-    importResults.statusBreakdown.sparse++;
-  }
+  // Try to match to existing property by address
+  const matchedProperty = findMatchingProperty(taskName, existingProperties);
 
   if (!matchedProperty) {
-    // No match found - INSERT as new property
-    try {
-      // Extract property name from address
-      const propertyName = extractPropertyName(address);
+    // No match found - SKIP (don't create new)
+    importResults.skipped++;
+    importResults.skippedProperties.push(taskName);
+    importResults.detailedLog.push({
+      csv_address: taskName,
+      status: 'SKIPPED',
+      reason: 'No matching property found in database'
+    });
+    console.log(`Skipped (no match): ${taskName}`);
+    return;
+  }
 
-      // Add required fields for new property
-      transformedData.name = propertyName;
-      transformedData.active = true;
-      transformedData.sort_order = sortOrder;
+  // Match found - UPDATE existing property
+  const transformedData = transformRowData(row);
 
-      const { error } = await supabaseClient
-        .from('properties')
-        .insert([transformedData]);
+  try {
+    const { error } = await supabaseClient
+      .from('properties')
+      .update(transformedData)
+      .eq('id', matchedProperty.id);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      importResults.successful++;
-      importResults.created++;
-      importResults.createdProperties.push(address);
-      importResults.detailedLog.push({
-        address,
-        property_name: propertyName,
-        status: 'CREATED',
-        import_status: importStatus,
-        fields_inserted: Object.keys(transformedData).length
-      });
+    importResults.updated++;
+    importResults.updatedProperties.push({
+      csv_address: taskName,
+      db_address: matchedProperty.address
+    });
+    importResults.detailedLog.push({
+      csv_address: taskName,
+      matched_to: matchedProperty.address,
+      property_id: matchedProperty.id,
+      status: 'UPDATED',
+      fields_updated: Object.keys(transformedData).length
+    });
 
-      console.log(`✓ Created: ${address} → ${propertyName}`);
-      return true; // Indicate a new property was created
-    } catch (error) {
-      importResults.errors++;
-      importResults.errorDetails.push({
-        address,
-        error: error.message
-      });
-      console.error(`✗ Failed to create: ${address}`, error);
-      return false;
-    }
-  } else {
-    // Match found - UPDATE existing property
-    try {
-      const { error } = await supabaseClient
-        .from('properties')
-        .update(transformedData)
-        .eq('id', matchedProperty.id);
-
-      if (error) throw error;
-
-      importResults.successful++;
-      importResults.updated++;
-      importResults.detailedLog.push({
-        address,
-        matched_to: matchedProperty.name,
-        status: 'UPDATED',
-        import_status: importStatus,
-        fields_updated: Object.keys(transformedData).length
-      });
-
-      console.log(`✓ Updated: ${address} → ${matchedProperty.name}`);
-      return false; // No new property created
-    } catch (error) {
-      importResults.errors++;
-      importResults.errorDetails.push({
-        address,
-        error: error.message
-      });
-      console.error(`✗ Failed to update: ${address}`, error);
-      return false;
-    }
+    console.log(`Updated: ${taskName} -> ${matchedProperty.address}`);
+  } catch (error) {
+    importResults.errors++;
+    importResults.errorDetails.push({
+      address: taskName,
+      error: error.message
+    });
+    console.error(`Failed to update: ${taskName}`, error);
   }
 }
 
@@ -322,16 +255,16 @@ async function processProperty(row, existingProperties, sortOrder) {
 function findMatchingProperty(csvAddress, existingProperties) {
   const normalizedCSV = normalizeAddress(csvAddress);
 
-  // Try exact match on name first
+  // Try exact match first
   let match = existingProperties.find(prop =>
-    normalizeAddress(prop.name) === normalizedCSV
+    normalizeAddress(prop.address) === normalizedCSV
   );
 
   if (match) return match;
 
-  // Try fuzzy match on street name
+  // Try fuzzy match - extract street number and name
   match = existingProperties.find(prop => {
-    const propNormalized = normalizeAddress(prop.name);
+    const propNormalized = normalizeAddress(prop.address);
     return fuzzyMatch(normalizedCSV, propNormalized);
   });
 
@@ -339,6 +272,7 @@ function findMatchingProperty(csvAddress, existingProperties) {
 }
 
 function normalizeAddress(address) {
+  if (!address) return '';
   return address
     .toLowerCase()
     .replace(/[^\w\s]/g, '') // Remove special chars
@@ -346,103 +280,77 @@ function normalizeAddress(address) {
     .trim();
 }
 
-function extractPropertyName(fullAddress) {
-  // Extract street name from full address
-  // Example: "3405 Chatham Ct, Forest Hill, TX 76140, USA" → "Chatham Ct"
-
-  // Try to extract street name (after street number, before comma)
-  const match = fullAddress.match(/^\d+\s+(.+?)(?:,|$)/);
-  if (match && match[1]) {
-    return match[1].trim();
-  }
-
-  // Fallback: use first part before comma
-  const parts = fullAddress.split(',');
-  if (parts.length > 0) {
-    return parts[0].trim();
-  }
-
-  // Last resort: use full address
-  return fullAddress.trim();
-}
-
 function fuzzyMatch(str1, str2) {
-  // Extract street names/numbers and compare
-  const extractStreetInfo = (str) => {
-    const match = str.match(/(\d+)\s+(\w+)/);
-    return match ? match[0] : str;
+  // Extract street number and first word of street name
+  const extractKey = (str) => {
+    const match = str.match(/^(\d+)\s+(\w+)/);
+    return match ? `${match[1]} ${match[2]}` : str;
   };
 
-  const street1 = extractStreetInfo(str1);
-  const street2 = extractStreetInfo(str2);
+  const key1 = extractKey(str1);
+  const key2 = extractKey(str2);
 
-  // Check if one contains the other
-  return street1.includes(street2) || street2.includes(street1);
+  return key1 === key2;
 }
 
 // ============================================================================
-// DATA TRANSFORMATION
+// DATA TRANSFORMATION - ClickUp to Supabase field mapping
 // ============================================================================
 
 function transformRowData(row) {
   const data = {};
 
-  // Address & Location
-  data.full_address = row['Task Name'] || null;
-  // Note: City, State, Zip are not in ClickUp CSV - left as null
+  // Status -> occupancy_status
+  if (row['Status']) {
+    data.occupancy_status = transformStatus(row['Status']);
+  }
 
-  // Physical Characteristics
-  data.bedrooms = parseInteger(row['1 Bedrooms (number)']);
-  data.bathrooms = parseDecimal(row['1 Bathrooms (number)']);
-  data.square_footage = parseInteger(row['1 Square Footage (number)']);
-  data.year_built = row['1 Year of house (short text)'] || null;
-  // Stories not in CSV
+  // Bedrooms
+  const bedrooms = parseInteger(row['1 Bedrooms (number)']);
+  if (bedrooms !== null) data.bedrooms = bedrooms;
 
-  // Financial - Current Value & Equity
-  data.current_value = parseCurrency(row['1 Zillow Value (currency)']);
-  data.equity = parseCurrency(row['2 Equity (formula)']);
+  // Bathrooms
+  const bathrooms = parseDecimal(row['1 Bathrooms (number)']);
+  if (bathrooms !== null) data.bathrooms = bathrooms;
 
-  // Financial - Acquisition
-  data.purchase_price = parseCurrency(row['2 Acquisition Cost (currency)']);
-  data.acquisition_method = row['2 Acquisition Method (drop down)'] || null;
-  data.purchase_date = parseDate(row['2 Date Acquired (date)']);
+  // Square Footage
+  const sqft = parseInteger(row['1 Square Footage (number)']);
+  if (sqft !== null) data.square_footage = sqft;
 
-  // Financial - Rental Income
-  data.market_rent = parseCurrency(row['3 Fair Market Rent (currency)']);
+  // Purchase Price (Acquisition Cost)
+  const purchasePrice = parseCurrency(row['2 Acquisition Cost (currency)']);
+  if (purchasePrice !== null) data.purchase_price = purchasePrice;
 
-  // Financial - Mortgage
-  data.mortgage_payment = parseCurrency(row['4 Monthly Pmt (currency)']);
-  data.mortgage_balance = parseCurrency(row['4 Mortgage (currency)']);
-  data.interest_rate = parseDecimal(row['4 Interest Rate for Loan (number)']);
-  data.mortgage_lender = row['Refi Bank (drop down)'] || null;
-  data.loan_number = row['TTCU # (number)'] || null;
+  // Purchase Date (Date Acquired)
+  const purchaseDate = parseDate(row['2 Date Acquired (date)']);
+  if (purchaseDate !== null) data.purchase_date = purchaseDate;
 
-  // Occupancy Status
-  data.occupancy_status = transformStatus(row['Status']);
+  // Market Rent (Fair Market Rent)
+  const marketRent = parseCurrency(row['3 Fair Market Rent (currency)']);
+  if (marketRent !== null) data.market_rent = marketRent;
 
-  // Management
-  data.property_manager = row['Department In Charge (drop down)'] || null;
+  // Mortgage Balance
+  const mortgageBalance = parseCurrency(row['4 Mortgage (currency)']);
+  if (mortgageBalance !== null) data.mortgage_balance = mortgageBalance;
 
-  // Property Features
-  data.foundation_type = row['Foundation Type (drop down)'] || null;
-  data.garage_spaces = row['Garage Spaces (drop down)'] || null;
-  data.gas_service = row['Gas At Property? (drop down)'] || null;
-  data.water_service = row['Water Type (drop down)'] || null;
-  data.stove_type = row['Stove Type (drop down)'] || null;
+  // Additional useful fields if present
+  const yearBuilt = row['1 Year of house (short text)'];
+  if (yearBuilt) data.year_built = parseInt(yearBuilt) || null;
 
-  // Boolean Features (checkboxes)
-  data.has_deck_porch = parseBoolean(row['Deck/Porch (checkbox)']);
-  data.has_dining_room = parseBoolean(row['Dining Room (checkbox)']);
-  data.has_family_room = parseBoolean(row['Family Room (checkbox)']);
-  data.has_laundry_room = parseBoolean(row['Laundry Room (checkbox)']);
-  data.has_living_room = parseBoolean(row['Living Room (checkbox)']);
-  data.has_office = parseBoolean(row['Office / Study (checkbox)']);
+  const currentValue = parseCurrency(row['1 Zillow Value (currency)']);
+  if (currentValue !== null) data.current_estimated_value = currentValue;
 
-  // Access
-  data.lockbox_code = row['Lockbox Code (number)'] || null;
+  const mortgagePayment = parseCurrency(row['4 Monthly Pmt (currency)']);
+  if (mortgagePayment !== null) data.mortgage_payment = mortgagePayment;
 
-  // Metadata
-  data.data_source = 'ClickUp Migration';
+  const interestRate = parseDecimal(row['4 Interest Rate for Loan (number)']);
+  if (interestRate !== null) data.interest_rate = interestRate;
+
+  const acquisitionMethod = row['2 Acquisition Method (drop down)'];
+  if (acquisitionMethod) data.acquisition_method = acquisitionMethod;
+
+  // Update timestamp
+  data.updated_at = new Date().toISOString();
 
   return data;
 }
@@ -470,17 +378,11 @@ function parseDecimal(value) {
   return isNaN(parsed) ? null : parsed;
 }
 
-function parseBoolean(value) {
-  if (!value) return false;
-  return value.toString().toLowerCase() === 'true';
-}
-
 function parseDate(value) {
   if (!value) return null;
 
   try {
     // Input format: "Tuesday, December 5th 2023, 8:11:40 am -06:00"
-    // Extract date parts
     const match = value.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?\s+(\d{4})/);
     if (match) {
       const [, month, day, year] = match;
@@ -488,6 +390,12 @@ function parseDate(value) {
       if (!isNaN(date.getTime())) {
         return date.toISOString().split('T')[0]; // YYYY-MM-DD
       }
+    }
+
+    // Try simple date format
+    const simpleDate = new Date(value);
+    if (!isNaN(simpleDate.getTime())) {
+      return simpleDate.toISOString().split('T')[0];
     }
   } catch (error) {
     console.warn('Date parse error:', value, error);
@@ -503,31 +411,12 @@ function transformStatus(status) {
     'occupied': 'Occupied',
     'eviction': 'Eviction in Progress',
     'new property': 'Vacant',
-    'traditional rental': 'Occupied'
+    'traditional rental': 'Occupied',
+    'vacant': 'Vacant',
+    'section 8': 'Occupied'
   };
 
   return statusMap[status.toLowerCase()] || status;
-}
-
-// ============================================================================
-// IMPORT STATUS CALCULATION
-// ============================================================================
-
-function calculateImportStatus(data) {
-  // Count non-null fields (excluding metadata)
-  const excludeFields = ['import_status', 'imported_at', 'data_source', 'updated_at'];
-  const filledFields = Object.entries(data)
-    .filter(([key, value]) =>
-      !excludeFields.includes(key) &&
-      value !== null &&
-      value !== undefined &&
-      value !== ''
-    )
-    .length;
-
-  if (filledFields >= 25) return 'Complete';
-  if (filledFields >= 15) return 'Needs Enhancement';
-  return 'Sparse';
 }
 
 // ============================================================================
@@ -549,28 +438,33 @@ function displayResults() {
 
   // Update stats
   document.getElementById('statTotal').textContent = importResults.total;
-  document.getElementById('statSuccess').textContent = importResults.successful;
-  document.getElementById('statCreated').textContent = importResults.created;
   document.getElementById('statUpdated').textContent = importResults.updated;
+  document.getElementById('statSkipped').textContent = importResults.skipped;
   document.getElementById('statErrors').textContent = importResults.errors;
 
-  // Status breakdown
-  if (importResults.successful > 0) {
-    document.getElementById('statusBreakdown').style.display = 'block';
-    document.getElementById('statusComplete').textContent = importResults.statusBreakdown.complete;
-    document.getElementById('statusNeedsEnhancement').textContent = importResults.statusBreakdown.needsEnhancement;
-    document.getElementById('statusSparse').textContent = importResults.statusBreakdown.sparse;
+  // Updated properties
+  if (importResults.updatedProperties.length > 0) {
+    document.getElementById('updatedSection').style.display = 'block';
+    const updatedList = document.getElementById('updatedList');
+    updatedList.innerHTML = importResults.updatedProperties
+      .map(item => `
+        <div class="result-item success">
+          <strong>${escapeHtml(item.csv_address)}</strong>
+          <small>Matched: ${escapeHtml(item.db_address)}</small>
+        </div>
+      `)
+      .join('');
   }
 
-  // Created properties
-  if (importResults.createdProperties.length > 0) {
-    document.getElementById('createdSection').style.display = 'block';
-    const createdList = document.getElementById('createdList');
-    createdList.innerHTML = importResults.createdProperties
+  // Skipped properties (no match)
+  if (importResults.skippedProperties.length > 0) {
+    document.getElementById('skippedSection').style.display = 'block';
+    const skippedList = document.getElementById('skippedList');
+    skippedList.innerHTML = importResults.skippedProperties
       .map(addr => `
-        <div class="created-item">
+        <div class="result-item skipped">
           <strong>${escapeHtml(addr)}</strong>
-          <small>New property created in database</small>
+          <small>No matching property in database</small>
         </div>
       `)
       .join('');
@@ -582,7 +476,7 @@ function displayResults() {
     const errorsList = document.getElementById('errorsList');
     errorsList.innerHTML = importResults.errorDetails
       .map(err => `
-        <div class="error-item">
+        <div class="result-item error">
           <strong>${escapeHtml(err.address)}</strong>
           <small>${escapeHtml(err.error)}</small>
         </div>
@@ -597,12 +491,12 @@ function downloadLog() {
   const logData = {
     summary: {
       total: importResults.total,
-      successful: importResults.successful,
-      unmatched: importResults.unmatched,
-      errors: importResults.errors,
-      statusBreakdown: importResults.statusBreakdown
+      updated: importResults.updated,
+      skipped: importResults.skipped,
+      errors: importResults.errors
     },
-    unmatchedProperties: importResults.unmatchedProperties,
+    updatedProperties: importResults.updatedProperties,
+    skippedProperties: importResults.skippedProperties,
     errors: importResults.errorDetails,
     detailedLog: importResults.detailedLog,
     timestamp: new Date().toISOString()
@@ -624,16 +518,12 @@ function resetTool() {
 function resetResults() {
   importResults = {
     total: 0,
-    successful: 0,
-    unmatched: 0,
+    updated: 0,
+    skipped: 0,
     errors: 0,
-    unmatchedProperties: [],
+    updatedProperties: [],
+    skippedProperties: [],
     errorDetails: [],
-    statusBreakdown: {
-      complete: 0,
-      needsEnhancement: 0,
-      sparse: 0
-    },
     detailedLog: []
   };
 }

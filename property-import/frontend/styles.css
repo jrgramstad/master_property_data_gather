@@ -107,6 +107,35 @@ details summary {
   font-size: 0.95em;
 }
 
+/* Field Mapping Table */
+.mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.mapping-table th,
+.mapping-table td {
+  padding: 10px 15px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.mapping-table th {
+  background: #667eea;
+  color: white;
+  font-weight: 600;
+}
+
+.mapping-table tr:nth-child(even) {
+  background: #f8f9fa;
+}
+
+.mapping-table td:first-child {
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
 /* Upload Section */
 .upload-section {
   margin-bottom: 40px;
@@ -317,6 +346,12 @@ details summary {
   border: 2px solid #f5c6cb;
 }
 
+.stat-skipped {
+  background: #fff3cd;
+  color: #856404;
+  border: 2px solid #ffeeba;
+}
+
 .stat-value {
   font-size: 3em;
   font-weight: bold;
@@ -386,21 +421,27 @@ details summary {
   color: #333;
 }
 
-/* Created & Errors Sections */
-.created-section,
+/* Result Sections */
+.updated-section,
+.skipped-section,
 .errors-section {
   background: #fff;
   padding: 25px;
   border-radius: 8px;
   margin-bottom: 30px;
-  border-left: 4px solid #17a2b8;
+  border-left: 4px solid #28a745;
+}
+
+.skipped-section {
+  border-left-color: #ffc107;
 }
 
 .errors-section {
   border-left-color: #dc3545;
 }
 
-.created-section h3,
+.updated-section h3,
+.skipped-section h3,
 .errors-section h3 {
   margin-bottom: 15px;
   color: #333;
@@ -411,8 +452,7 @@ details summary {
   margin-bottom: 15px;
 }
 
-.created-list,
-.errors-list {
+.result-list {
   background: #f8f9fa;
   padding: 20px;
   border-radius: 6px;
@@ -420,28 +460,33 @@ details summary {
   overflow-y: auto;
 }
 
-.created-item,
-.error-item {
+.result-item {
   padding: 12px;
   background: white;
   border-radius: 6px;
   margin-bottom: 10px;
-  border-left: 3px solid #17a2b8;
+  border-left: 3px solid #ccc;
 }
 
-.error-item {
+.result-item.success {
+  border-left-color: #28a745;
+}
+
+.result-item.skipped {
+  border-left-color: #ffc107;
+}
+
+.result-item.error {
   border-left-color: #dc3545;
 }
 
-.created-item strong,
-.error-item strong {
+.result-item strong {
   color: #333;
   display: block;
   margin-bottom: 5px;
 }
 
-.created-item small,
-.error-item small {
+.result-item small {
   color: #666;
   font-size: 0.9em;
 }

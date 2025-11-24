@@ -10,9 +10,9 @@
   <div class="container">
     <!-- Header -->
     <header class="header">
-      <h1>🏠 Property Master Data Import</h1>
-      <p class="subtitle">ClickUp → Supabase Migration Tool</p>
-      <p class="warning">⚠️ One-time migration tool - Updates existing properties only</p>
+      <h1>Property Master Data Import</h1>
+      <p class="subtitle">ClickUp CSV to Supabase Migration Tool</p>
+      <p class="warning">UPDATE ONLY - Will not create new properties</p>
     </header>
 
     <!-- Instructions -->
@@ -22,23 +22,30 @@
         <li>Export your property data from ClickUp as CSV</li>
         <li>Upload the CSV file below</li>
         <li>Click "Import Data" to process</li>
-        <li>Review the results and handle any unmatched properties</li>
+        <li>Review the results</li>
       </ol>
       <details>
-        <summary>📋 Expected CSV Columns (click to expand)</summary>
+        <summary>Field Mappings (click to expand)</summary>
         <div class="expected-columns">
-          <p>Your CSV should include these columns:</p>
-          <ul>
-            <li>Task Name (property address)</li>
-            <li>Status, Bedrooms, Bathrooms, Square Footage</li>
-            <li>Year of house, Zillow Value, Acquisition Cost</li>
-            <li>Date Acquired, Acquisition Method</li>
-            <li>Fair Market Rent, Monthly Payment, Mortgage Balance</li>
-            <li>Interest Rate, Department In Charge</li>
-            <li>Foundation Type, Garage Spaces, Gas/Water/Stove Type</li>
-            <li>Checkboxes: Deck/Porch, Dining Room, Family Room, etc.</li>
-            <li>Lockbox Code, TTCU #, Refi Bank</li>
-          </ul>
+          <table class="mapping-table">
+            <thead>
+              <tr><th>ClickUp Column</th><th>Database Field</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Task Name</td><td>Match to address</td></tr>
+              <tr><td>Status</td><td>occupancy_status</td></tr>
+              <tr><td>1 Bedrooms (number)</td><td>bedrooms</td></tr>
+              <tr><td>1 Bathrooms (number)</td><td>bathrooms</td></tr>
+              <tr><td>1 Square Footage (number)</td><td>square_footage</td></tr>
+              <tr><td>2 Acquisition Cost (currency)</td><td>purchase_price</td></tr>
+              <tr><td>2 Date Acquired (date)</td><td>purchase_date</td></tr>
+              <tr><td>3 Fair Market Rent (currency)</td><td>market_rent</td></tr>
+              <tr><td>4 Mortgage (currency)</td><td>mortgage_balance</td></tr>
+              <tr><td>4 Monthly Pmt (currency)</td><td>mortgage_payment</td></tr>
+              <tr><td>1 Year of house (short text)</td><td>year_built</td></tr>
+              <tr><td>1 Zillow Value (currency)</td><td>current_estimated_value</td></tr>
+            </tbody>
+          </table>
         </div>
       </details>
     </section>
@@ -59,7 +66,7 @@
       </div>
 
       <div id="fileInfo" class="file-info" style="display: none;">
-        <p>📄 <strong id="fileName"></strong></p>
+        <p><strong id="fileName"></strong></p>
         <p class="file-stats">
           <span id="fileSize"></span> |
           <span id="rowCount"></span> rows
@@ -78,7 +85,6 @@
         <div class="progress-fill" id="progressFill"></div>
       </div>
       <p class="progress-text" id="progressText">Processing...</p>
-      <div class="progress-details" id="progressDetails"></div>
     </section>
 
     <!-- Results Section -->
@@ -89,19 +95,15 @@
       <div class="stats-grid">
         <div class="stat-card stat-total">
           <div class="stat-value" id="statTotal">0</div>
-          <div class="stat-label">Total Processed</div>
+          <div class="stat-label">Total Rows</div>
         </div>
         <div class="stat-card stat-success">
-          <div class="stat-value" id="statSuccess">0</div>
-          <div class="stat-label">Successfully Imported</div>
-        </div>
-        <div class="stat-card stat-created">
-          <div class="stat-value" id="statCreated">0</div>
-          <div class="stat-label">Created (New)</div>
-        </div>
-        <div class="stat-card stat-updated">
           <div class="stat-value" id="statUpdated">0</div>
-          <div class="stat-label">Updated (Existing)</div>
+          <div class="stat-label">Updated</div>
+        </div>
+        <div class="stat-card stat-skipped">
+          <div class="stat-value" id="statSkipped">0</div>
+          <div class="stat-label">Skipped (No Match)</div>
         </div>
         <div class="stat-card stat-errors">
           <div class="stat-value" id="statErrors">0</div>
@@ -109,45 +111,32 @@
         </div>
       </div>
 
-      <!-- Import Status Breakdown -->
-      <div class="status-breakdown" id="statusBreakdown" style="display: none;">
-        <h3>Import Status Breakdown</h3>
-        <div class="status-items">
-          <div class="status-item">
-            <span class="status-badge status-complete">Complete</span>
-            <span class="status-count" id="statusComplete">0</span>
-          </div>
-          <div class="status-item">
-            <span class="status-badge status-needs-enhancement">Needs Enhancement</span>
-            <span class="status-count" id="statusNeedsEnhancement">0</span>
-          </div>
-          <div class="status-item">
-            <span class="status-badge status-sparse">Sparse</span>
-            <span class="status-count" id="statusSparse">0</span>
-          </div>
-        </div>
+      <!-- Updated Properties -->
+      <div class="updated-section" id="updatedSection" style="display: none;">
+        <h3>Successfully Updated</h3>
+        <div class="result-list" id="updatedList"></div>
       </div>
 
-      <!-- Created Properties -->
-      <div class="created-section" id="createdSection" style="display: none;">
-        <h3>✨ New Properties Created</h3>
-        <p class="help-text">These properties were added as new records to the database:</p>
-        <div class="created-list" id="createdList"></div>
+      <!-- Skipped Properties -->
+      <div class="skipped-section" id="skippedSection" style="display: none;">
+        <h3>Skipped (No Match Found)</h3>
+        <p class="help-text">These addresses from the CSV did not match any existing property in the database:</p>
+        <div class="result-list" id="skippedList"></div>
       </div>
 
       <!-- Errors -->
       <div class="errors-section" id="errorsSection" style="display: none;">
-        <h3>❌ Errors</h3>
-        <div class="errors-list" id="errorsList"></div>
+        <h3>Errors</h3>
+        <div class="result-list" id="errorsList"></div>
       </div>
 
       <!-- Download Logs -->
       <div class="download-section">
         <button id="downloadLogBtn" class="btn btn-secondary">
-          📥 Download Detailed Import Log (JSON)
+          Download Import Log (JSON)
         </button>
         <button id="resetBtn" class="btn btn-secondary">
-          🔄 Import Another File
+          Import Another File
         </button>
       </div>
     </section>
