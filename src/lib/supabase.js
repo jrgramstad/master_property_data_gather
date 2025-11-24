@@ -27,14 +27,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
  * @returns {Promise<Array>} Array of property objects
  */
 export async function getAllProperties() {
-  const { data, error} = await supabase
+  const { data, error } = await supabase
     .from('properties')
     .select('*')
-    .eq('active', true)
-    .order('created_at', { ascending: false })
+    .order('name')
 
   if (error) throw error
-  return data || []
+
+  // Filter in JavaScript instead of SQL to avoid 400 error
+  const activeProperties = (data || []).filter(prop => prop.active === true)
+
+  console.log(`Total properties: ${data?.length}, Active: ${activeProperties.length}`)
+
+  return activeProperties
 }
 
 /**
