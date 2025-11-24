@@ -30,7 +30,7 @@ export async function getAllProperties() {
   const { data, error } = await supabase
     .from('properties')
     .select('*')
-    .order('name')
+    .order('full_address')
 
   if (error) throw error
 
