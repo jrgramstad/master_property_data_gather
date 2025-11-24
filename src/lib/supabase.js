@@ -30,16 +30,19 @@ export async function getAllProperties() {
   const { data, error } = await supabase
     .from('properties')
     .select('*')
-    .order('full_address')
 
   if (error) throw error
 
-  // Filter in JavaScript instead of SQL to avoid 400 error
-  const activeProperties = (data || []).filter(prop => prop.active === true)
+  // Sort by address in JavaScript (avoids column name issues)
+  const sorted = (data || []).sort((a, b) => {
+    const addrA = (a.address || '').toLowerCase()
+    const addrB = (b.address || '').toLowerCase()
+    return addrA.localeCompare(addrB)
+  })
 
-  console.log(`Total properties: ${data?.length}, Active: ${activeProperties.length}`)
+  console.log(`Total properties: ${sorted.length}`)
 
-  return activeProperties
+  return sorted
 }
 
 /**
@@ -253,21 +256,21 @@ export async function upsertPropertyTaxes(records) {
  */
 export async function getDashboardStats() {
   try {
-    // The property_statistics view is broken, so calculate manually
+    // Calculate stats from properties table directly
     const { data: properties, error } = await supabase
       .from('properties')
       .select('*')
 
     if (error) throw error
 
-    const activeProperties = properties?.filter(p => p.active === true) || []
+    const total = properties?.length || 0
 
     // Calculate stats from the properties directly
     return {
-      total: activeProperties.length,
-      completed: 0,  // We'll calculate this properly later
-      inProgress: 0,  // We'll calculate this properly later
-      notStarted: activeProperties.length,  // For now, assume all need work
+      total: total,
+      completed: 0,
+      inProgress: 0,
+      notStarted: total,
       completionRate: 0
     }
   } catch (error) {
