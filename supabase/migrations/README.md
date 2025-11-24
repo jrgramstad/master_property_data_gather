@@ -57,6 +57,27 @@ This directory contains SQL migration files for updating the Supabase database s
 
 **When to run**: If dropdown fields show duplicate options (each choice appears twice)
 
+### 003_create_property_taxes_table.sql
+**Purpose**: Create a table to track property tax information by year
+
+**Reason**: Need to track annual property taxes, payments, and escrow information for each property.
+
+**Changes**:
+- Creates new `property_taxes` table with columns:
+  - `property_id` - Links to properties table
+  - `tax_year` - The tax year
+  - `tax_amount` - Annual tax amount
+  - `payment_status` - Default 'unpaid'
+  - `payment_date` - When payment was made
+  - `payment_amount` - Amount paid
+  - `escrow_monthly` - Monthly escrow amount
+  - `notes` - Additional notes
+- Adds UNIQUE constraint on `(property_id, tax_year)`
+- Adds indexes for performance
+- Disables row level security (matches existing tables)
+
+**When to run**: When you need to track property tax information
+
 ## Verification
 
 After running a migration, verify it worked:
@@ -89,6 +110,16 @@ FROM dropdown_options
 GROUP BY option_type
 ORDER BY option_type;
 ```
+
+### Check property_taxes table exists (Migration 003)
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'property_taxes'
+ORDER BY ordinal_position;
+```
+
+Should return all columns of the property_taxes table.
 
 ## Rollback
 
