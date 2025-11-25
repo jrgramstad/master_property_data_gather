@@ -155,11 +155,10 @@ function Wizard() {
   function validateStep() {
     const requiredFields = {
       2: [
-        { field: 'address', label: 'Street Address' },
+        { field: 'name', label: 'Property Name' },
         { field: 'city', label: 'City' },
         { field: 'state', label: 'State' },
-        { field: 'zip', label: 'ZIP Code' },
-        { field: 'property_type', label: 'Property Type' },
+        { field: 'zip_code', label: 'ZIP Code' },
         { field: 'bedrooms', label: 'Bedrooms' },
         { field: 'bathrooms', label: 'Bathrooms' }
       ],
@@ -421,7 +420,7 @@ function Step1({ propertyData, propertyList, onPropertySelected, goToDashboard, 
           <option value="new">+ Add New Property</option>
           {propertyList.map((property) => (
             <option key={property.id} value={property.id}>
-              {property.address}
+              {property.name}
             </option>
           ))}
         </select>
@@ -447,13 +446,13 @@ function Step2({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
 
       <div className="form-row">
         <div className="form-group">
-          <label className="form-label required">Street Address</label>
+          <label className="form-label required">Property Name</label>
           <input
             type="text"
             className="form-input"
-            placeholder="123 Main Street"
-            value={propertyData.address || ''}
-            onChange={(e) => updateField('address', e.target.value)}
+            placeholder="123 Main Street, Dallas"
+            value={propertyData.name || ''}
+            onChange={(e) => updateField('name', e.target.value)}
           />
         </div>
         <div className="form-group">
@@ -490,8 +489,8 @@ function Step2({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
             type="text"
             className="form-input"
             placeholder="75201"
-            value={propertyData.zip || ''}
-            onChange={(e) => updateField('zip', e.target.value)}
+            value={propertyData.zip_code || ''}
+            onChange={(e) => updateField('zip_code', e.target.value)}
           />
         </div>
         <div className="form-group">
@@ -654,14 +653,14 @@ function Step3({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
 
       <div className="form-row">
         <div className="form-group">
-          <label className="form-label">Current Estimated Value</label>
+          <label className="form-label">Current Value</label>
           <input
             type="number"
             className="form-input"
             min="0"
             placeholder="150000"
-            value={propertyData.current_estimated_value || ''}
-            onChange={(e) => updateField('current_estimated_value', parseFloat(e.target.value))}
+            value={propertyData.current_value || ''}
+            onChange={(e) => updateField('current_value', parseFloat(e.target.value))}
           />
         </div>
         <div className="form-group">
@@ -679,14 +678,14 @@ function Step3({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
 
       <div className="form-row">
         <div className="form-group">
-          <label className="form-label">Current Monthly Rent</label>
+          <label className="form-label">Monthly Rent</label>
           <input
             type="number"
             className="form-input"
             min="0"
             placeholder="1200"
-            value={propertyData.current_monthly_rent || ''}
-            onChange={(e) => updateField('current_monthly_rent', parseFloat(e.target.value))}
+            value={propertyData.monthly_rent || ''}
+            onChange={(e) => updateField('monthly_rent', parseFloat(e.target.value))}
           />
         </div>
         <div className="form-group">
@@ -831,11 +830,11 @@ function Step4({ propertyData, updateField, dropdownOptions, prevStep, saveAndCo
           />
         </div>
         <div className="form-group">
-          <label className="form-label">Rent Payment Status</label>
+          <label className="form-label">Payment Status</label>
           <select
             className="form-select"
-            value={propertyData.rent_payment_status || ''}
-            onChange={(e) => updateField('rent_payment_status', e.target.value)}
+            value={propertyData.payment_status || ''}
+            onChange={(e) => updateField('payment_status', e.target.value)}
           >
             <option value="">Select Status</option>
             {(dropdownOptions.RentPaymentStatus || []).map((option) => (
@@ -881,16 +880,16 @@ function Step5({ propertyData, updateField, dropdownOptions, prevStep, saveAndFi
             type="text"
             className="form-input"
             placeholder="Kalen"
-            value={propertyData.last_inspector || ''}
-            onChange={(e) => updateField('last_inspector', e.target.value)}
+            value={propertyData.inspector_name || ''}
+            onChange={(e) => updateField('inspector_name', e.target.value)}
           />
         </div>
         <div className="form-group">
           <label className="form-label">Overall Condition</label>
           <select
             className="form-select"
-            value={propertyData.overall_condition_rating || ''}
-            onChange={(e) => updateField('overall_condition_rating', e.target.value)}
+            value={propertyData.overall_condition || ''}
+            onChange={(e) => updateField('overall_condition', e.target.value)}
           >
             <option value="">Select Rating</option>
             {(dropdownOptions.ConditionRating || []).map((option) => (
@@ -908,8 +907,8 @@ function Step5({ propertyData, updateField, dropdownOptions, prevStep, saveAndFi
           <input
             type="date"
             className="form-input"
-            value={formatDateForInput(propertyData.last_hvac_service_date) || ''}
-            onChange={(e) => updateField('last_hvac_service_date', e.target.value)}
+            value={formatDateForInput(propertyData.hvac_last_service) || ''}
+            onChange={(e) => updateField('hvac_last_service', e.target.value)}
           />
         </div>
         <div className="form-group">
@@ -930,8 +929,8 @@ function Step5({ propertyData, updateField, dropdownOptions, prevStep, saveAndFi
           <input
             type="date"
             className="form-input"
-            value={formatDateForInput(propertyData.last_roof_inspection_date) || ''}
-            onChange={(e) => updateField('last_roof_inspection_date', e.target.value)}
+            value={formatDateForInput(propertyData.roof_last_inspection) || ''}
+            onChange={(e) => updateField('roof_last_inspection', e.target.value)}
           />
         </div>
         <div className="form-group">
@@ -982,8 +981,8 @@ function Step5({ propertyData, updateField, dropdownOptions, prevStep, saveAndFi
           <textarea
             className="form-textarea"
             placeholder="Pending maintenance requests..."
-            value={propertyData.pending_maintenance_requests || ''}
-            onChange={(e) => updateField('pending_maintenance_requests', e.target.value)}
+            value={propertyData.pending_maintenance || ''}
+            onChange={(e) => updateField('pending_maintenance', e.target.value)}
           />
         </div>
       </div>

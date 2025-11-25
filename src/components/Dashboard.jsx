@@ -20,7 +20,7 @@ function Dashboard() {
     completionRate: 0
   })
   const [filter, setFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('address')
+  const [sortBy, setSortBy] = useState('name')
   const [error, setError] = useState(null)
 
   // Load data on mount
@@ -83,8 +83,8 @@ function Dashboard() {
   function applySort() {
     const sorted = [...filteredProperties].sort((a, b) => {
       switch (sortBy) {
-        case 'address':
-          return (a.address || '').localeCompare(b.address || '')
+        case 'name':
+          return (a.name || '').localeCompare(b.name || '')
         case 'completeness-asc':
           return (a.data_completeness_score || 0) - (b.data_completeness_score || 0)
         case 'completeness-desc':
@@ -225,7 +225,7 @@ function Dashboard() {
             onChange={(e) => setSortBy(e.target.value)}
             style={{ width: 'auto' }}
           >
-            <option value="address">Address</option>
+            <option value="name">Name</option>
             <option value="completeness-asc">Completeness (Low to High)</option>
             <option value="completeness-desc">Completeness (High to Low)</option>
             <option value="date">Last Verified Date</option>
@@ -239,12 +239,12 @@ function Dashboard() {
           <table className="property-table">
             <thead>
               <tr>
-                <th>Address</th>
+                <th>Property Name</th>
                 <th>City</th>
-                <th>Type</th>
                 <th>Status</th>
+                <th>Monthly Rent</th>
                 <th>Completeness</th>
-                <th>Last Verified</th>
+                <th>Last Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -256,16 +256,16 @@ function Dashboard() {
 
                 return (
                   <tr key={property.id} className={rowClass} onClick={() => editProperty(property.id)}>
-                    <td>{property.address || 'No Address'}</td>
+                    <td>{property.name || 'No Name'}</td>
                     <td>{property.city || '-'}</td>
-                    <td>{property.property_type || '-'}</td>
                     <td>{property.occupancy_status || '-'}</td>
+                    <td>{property.monthly_rent ? `$${property.monthly_rent.toLocaleString()}` : '-'}</td>
                     <td>
                       <span className={`progress-badge ${badgeClass}`}>
                         {completeness}%
                       </span>
                     </td>
-                    <td>{formatDate(property.last_verified_date) || 'Never'}</td>
+                    <td>{formatDate(property.updated_at) || 'Never'}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <button
                         className="btn btn-primary"

@@ -89,11 +89,11 @@ function PropertyTaxes() {
       // Get properties for matching
       const properties = await getPropertiesForMatching()
 
-      // Create lookup map (lowercase trimmed address -> property)
+      // Create lookup map (lowercase trimmed name -> property)
       const propertyMap = new Map()
       properties.forEach(p => {
-        if (p.address) {
-          propertyMap.set(p.address.toLowerCase().trim(), p)
+        if (p.name) {
+          propertyMap.set(p.name.toLowerCase().trim(), p)
         }
       })
 
@@ -287,7 +287,7 @@ function PropertyTaxes() {
                 const statusClass = getStatusClass(tax.payment_status)
                 return (
                   <tr key={tax.id}>
-                    <td>{tax.properties?.address || 'Unknown Property'}</td>
+                    <td>{tax.properties?.name || 'Unknown Property'}</td>
                     <td>{tax.tax_year}</td>
                     <td>{formatCurrency(tax.tax_amount)}</td>
                     <td>

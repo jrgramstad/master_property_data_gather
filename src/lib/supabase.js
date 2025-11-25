@@ -29,10 +29,10 @@ export async function getAllProperties() {
 
   if (error) throw error
 
-  // Sort by address in JavaScript (avoids column name issues)
+  // Sort by name in JavaScript (avoids column name issues)
   const sorted = (data || []).sort((a, b) => {
-    const addrA = (a.address || '').toLowerCase()
-    const addrB = (b.address || '').toLowerCase()
+    const addrA = (a.name || '').toLowerCase()
+    const addrB = (b.name || '').toLowerCase()
     return addrA.localeCompare(addrB)
   })
 
@@ -211,7 +211,7 @@ export async function getPropertyTaxes(taxYear = null) {
       *,
       properties (
         id,
-        address
+        name
       )
     `)
     .order('tax_year', { ascending: false })
@@ -251,7 +251,7 @@ export async function getTaxYears() {
 export async function getPropertiesForMatching() {
   const { data, error } = await supabase
     .from('properties')
-    .select('id, address')
+    .select('id, name')
     .eq('active', true)
 
   if (error) throw error
@@ -316,16 +316,24 @@ export async function getDashboardStats() {
 
 /**
  * Get property list for dropdown (simplified view)
- * @returns {Promise<Array>} Array of {id, name, address} objects
+ * @returns {Promise<Array>} Array of {id, name} objects
  */
 export async function getPropertyList() {
   const { data, error } = await supabase
     .from('properties')
-    .select('id, address')
-    .order('address', { ascending: true })
+    .select('id, name')
+    .eq('active', true)
 
   if (error) throw error
-  return data || []
+
+  // Sort by name in JavaScript
+  const sorted = (data || []).sort((a, b) => {
+    const nameA = (a.name || '').toLowerCase()
+    const nameB = (b.name || '').toLowerCase()
+    return nameA.localeCompare(nameB)
+  })
+
+  return sorted
 }
 
 // ============================================================================
