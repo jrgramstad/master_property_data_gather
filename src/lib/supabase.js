@@ -222,6 +222,7 @@ export async function getPropertiesForMatching() {
   const { data, error } = await supabase
     .from('properties')
     .select('id, address')
+    .eq('active', true)
 
   if (error) throw error
   return data || []
@@ -256,6 +257,7 @@ export async function getDashboardStats() {
     const { data: properties, error } = await supabase
       .from('properties')
       .select('*')
+      .eq('active', true)
 
     if (error) throw error
 
