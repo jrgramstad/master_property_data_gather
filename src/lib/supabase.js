@@ -25,6 +25,7 @@ export async function getAllProperties() {
   const { data, error } = await supabase
     .from('properties')
     .select('*')
+    .eq('active', true)
 
   if (error) throw error
 
