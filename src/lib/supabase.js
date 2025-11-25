@@ -125,28 +125,52 @@ export async function deleteProperty(id) {
 // DROPDOWN OPTIONS API
 // ============================================================================
 
+// Default dropdown options (used when dropdown_options table doesn't exist)
+const DEFAULT_DROPDOWN_OPTIONS = {
+  State: ['TX', 'OK', 'AR', 'LA', 'NM', 'CO', 'KS', 'MO'],
+  PropertyType: ['Single Family', 'Duplex', 'Triplex', 'Fourplex', 'Multi-Family', 'Condo', 'Townhouse', 'Mobile Home', 'Land', 'Commercial'],
+  AcquisitionMethod: ['Traditional Purchase', 'Foreclosure', 'Short Sale', 'Auction', 'Wholesale', 'Owner Finance', 'Subject To', 'Lease Option'],
+  OccupancyStatus: ['Occupied', 'Vacant', 'Owner Occupied', 'Renovation', 'Listed for Sale'],
+  LeaseType: ['Month-to-Month', 'Annual', '6-Month', '2-Year', 'Section 8'],
+  RentPaymentStatus: ['Current', 'Late', 'Delinquent', 'Eviction', 'N/A'],
+  ConditionRating: ['Excellent', 'Good', 'Fair', 'Poor', 'Needs Renovation']
+}
+
 /**
  * Get all dropdown options grouped by type
  * @returns {Promise<Object>} Object with option types as keys
  */
 export async function getDropdownOptions() {
-  const { data, error } = await supabase
-    .from('dropdown_options')
-    .select('*')
-    .order('sort_order', { ascending: true })
+  try {
+    const { data, error } = await supabase
+      .from('dropdown_options')
+      .select('*')
+      .order('sort_order', { ascending: true })
 
-  if (error) throw error
-
-  // Group by option_type
-  const grouped = {}
-  data.forEach(option => {
-    if (!grouped[option.option_type]) {
-      grouped[option.option_type] = []
+    if (error) {
+      console.warn('dropdown_options table not found, using defaults:', error.message)
+      return DEFAULT_DROPDOWN_OPTIONS
     }
-    grouped[option.option_type].push(option.option_value)
-  })
 
-  return grouped
+    // Group by option_type
+    const grouped = {}
+    data.forEach(option => {
+      if (!grouped[option.option_type]) {
+        grouped[option.option_type] = []
+      }
+      grouped[option.option_type].push(option.option_value)
+    })
+
+    // If table exists but is empty, use defaults
+    if (Object.keys(grouped).length === 0) {
+      return DEFAULT_DROPDOWN_OPTIONS
+    }
+
+    return grouped
+  } catch (err) {
+    console.warn('Error fetching dropdown options, using defaults:', err.message)
+    return DEFAULT_DROPDOWN_OPTIONS
+  }
 }
 
 /**
@@ -155,14 +179,20 @@ export async function getDropdownOptions() {
  * @returns {Promise<Array>} Array of option values
  */
 export async function getDropdownOptionsByType(optionType) {
-  const { data, error } = await supabase
-    .from('dropdown_options')
-    .select('option_value')
-    .eq('option_type', optionType)
-    .order('sort_order', { ascending: true })
+  try {
+    const { data, error } = await supabase
+      .from('dropdown_options')
+      .select('option_value')
+      .eq('option_type', optionType)
+      .order('sort_order', { ascending: true })
 
-  if (error) throw error
-  return data.map(item => item.option_value)
+    if (error) {
+      return DEFAULT_DROPDOWN_OPTIONS[optionType] || []
+    }
+    return data.map(item => item.option_value)
+  } catch (err) {
+    return DEFAULT_DROPDOWN_OPTIONS[optionType] || []
+  }
 }
 
 // ============================================================================
